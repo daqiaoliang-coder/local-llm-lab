@@ -1,0 +1,14 @@
+# Go
+/bin/
+/dist/
+
+# OS
+.DS_Store
+
+# local data
+data/
+.env
+
+# editor
+.idea/
+.vscode/
