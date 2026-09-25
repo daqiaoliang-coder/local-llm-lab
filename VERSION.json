@@ -1,8 +1,10 @@
 {
-  "version": "v0.2",
+  "version": "v0.3",
   "features": [
-    "native tool calling",
-    "sqlite durable state",
-    "run/step/toolcall persistence"
+    "checkpoint",
+    "crash recovery",
+    "retry policy",
+    "idempotency key",
+    "recovery manager"
   ]
 }

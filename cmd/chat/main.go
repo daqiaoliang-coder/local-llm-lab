@@ -30,6 +30,8 @@ func main() {
 	registry.Register(tools.NewReadFileTool(workspace))
 
 	ag := agent.New(client, registry, store)
+	recovery := agent.NewRecoveryManager(store, registry)
+	if err := recovery.Recover(ctx); err != nil { fmt.Printf("[recovery] error=%v\n", err) }
 
 	fmt.Printf("Local LLM Lab v0.2 | model=%s | db=%s\n", model, dbPath)
 	fmt.Println("输入 exit 退出。")
