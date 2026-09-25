@@ -2,42 +2,41 @@ package llm
 
 import (
 	"context"
-
 	openai "github.com/sashabaranov/go-openai"
 )
 
 type OllamaClient struct {
 	client *openai.Client
-	model  string
+	model string
 }
 
 func NewOllamaClient(baseURL, model string) *OllamaClient {
 	cfg := openai.DefaultConfig("ollama")
 	cfg.BaseURL = baseURL
-	return &OllamaClient{
-		client: openai.NewClientWithConfig(cfg),
-		model:  model,
-	}
+	return &OllamaClient{client: openai.NewClientWithConfig(cfg), model: model}
 }
 
-func (c *OllamaClient) Chat(ctx context.Context, messages []Message) (string, error) {
-	reqMessages := make([]openai.ChatCompletionMessage, 0, len(messages))
-	for _, m := range messages {
-		reqMessages = append(reqMessages, openai.ChatCompletionMessage{
-			Role:    m.Role,
-			Content: m.Content,
+func (c *OllamaClient) Chat(ctx context.Context, messages []openai.ChatCompletionMessage, tools []ToolSpec) (ChatResult, error) {
+	reqTools := make([]openai.Tool, 0, len(tools))
+	for _, t := range tools {
+		reqTools = append(reqTools, openai.Tool{
+			Type: openai.ToolTypeFunction,
+			Function: &openai.FunctionDefinition{
+				Name: t.Name,
+				Description: t.Description,
+				Parameters: t.Parameters,
+			},
 		})
 	}
 
 	resp, err := c.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-		Model:    c.model,
-		Messages: reqMessages,
+		Model: c.model, Messages: messages, Tools: reqTools,
 	})
-	if err != nil {
-		return "", err
-	}
-	if len(resp.Choices) == 0 {
-		return "", nil
-	}
-	return resp.Choices[0].Message.Content, nil
+	if err != nil { return ChatResult{}, err }
+	if len(resp.Choices) == 0 { return ChatResult{}, nil }
+
+	return ChatResult{
+		Content: resp.Choices[0].Message.Content,
+		ToolCalls: resp.Choices[0].Message.ToolCalls,
+	}, nil
 }

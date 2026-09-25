@@ -1,12 +1,21 @@
 package llm
 
-import "context"
+import (
+	"context"
+	openai "github.com/sashabaranov/go-openai"
+)
 
-type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+type ToolSpec struct {
+	Name string
+	Description string
+	Parameters map[string]any
+}
+
+type ChatResult struct {
+	Content string
+	ToolCalls []openai.ToolCall
 }
 
 type Client interface {
-	Chat(ctx context.Context, messages []Message) (string, error)
+	Chat(context.Context, []openai.ChatCompletionMessage, []ToolSpec) (ChatResult, error)
 }

@@ -1,189 +1,105 @@
-# Local LLM Lab v0.1
+# Local LLM Lab v0.2
 
-一个面向 Agent Infra 学习的本地小模型实验室，目标是用一台 32GB Intel Mac 跑通：
+v0.2 在 v0.1 的 Ollama + Agent Loop 基础上加入：
+- Native Tool Calling
+- SQLite Durable State
+- Run / Step / ToolCall 持久化
 
-- Ollama 本地 LLM
-- OpenAI-compatible API
-- Go LLM Client
-- Tool Calling / Agent Loop
-- 本地文件工具
-- 可选 RAG 实验
-- 后续接入已有 Agent Runtime
-
-## 1. 环境
-
-推荐：
-
-- macOS
-- Go 1.22+
-- Ollama
-- Python 3.10+（后续 RAG / 模型实验使用）
-
-安装 Ollama：
-
-https://ollama.com/
-
-拉取模型：
+## 启动
 
 ```bash
 ollama pull qwen3:4b
-```
-
-启动：
-
-```bash
 ollama serve
 ```
 
-另开终端运行：
+另开终端：
 
 ```bash
+go mod tidy
 go run ./cmd/chat
 ```
 
-## 2. 项目结构
+默认环境变量：
+- LLM_BASE_URL=http://localhost:11434/v1
+- LLM_MODEL=qwen3:4b
+- DB_PATH=./data/agent.db
+- LAB_WORKSPACE=.
+
+示例：
 
 ```text
-local-llm-lab/
-├── cmd/chat/              # 最小 CLI
-├── internal/llm/          # Ollama/OpenAI-compatible client
-├── internal/agent/        # Agent Loop
-├── internal/tools/        # Tool Registry + 文件工具
-├── docs/                  # 学习与实验记录
-├── experiments/           # 实验脚本/记录
-└── Makefile
+you> 请查看当前目录有哪些文件
 ```
 
-## 3. 当前能力
-
-v0.1 已实现：
-
-1. 向本地 Ollama 发送 Chat 请求
-2. 基础 Agent Loop
-3. Tool Registry
-4. `list_files` 工具
-5. `read_file` 工具
-6. 简单的工具调用协议
-7. CLI 交互
-
-> 注意：不同 Ollama/Qwen 版本对原生 tool calling 的行为可能不同。v0.1 保留了明确的 ToolCall 数据结构和执行边界，方便后续替换成原生 OpenAI-compatible tools。
-
-## 4. 运行
-
-```bash
-make run
-```
-
-或者：
-
-```bash
-go run ./cmd/chat
-```
-
-默认服务：
-
-```text
-http://localhost:11434/v1
-```
-
-默认模型：
-
-```text
-qwen3:4b
-```
-
-可以覆盖：
-
-```bash
-LLM_MODEL=qwen3:4b LLM_BASE_URL=http://localhost:11434/v1 go run ./cmd/chat
-```
-
-## 5. 建议实验路线
-
-### Experiment 01
-单轮 LLM：
-
-```text
-User -> LLM -> Answer
-```
-
-### Experiment 02
-Agent Loop：
+执行链路：
 
 ```text
 User
   ↓
+Run
+  ↓
+LLM Step
+  ↓
+assistant.tool_calls[]
+  ↓
+ToolCall
+  ↓
+Tool Result
+  ↓
 LLM
   ↓
-Tool?
-  ├── No -> Answer
-  └── Yes -> Tool -> Observation -> LLM
+Final Answer
 ```
 
-### Experiment 03
-加入 Tool Registry：
+SQLite 核心表：
 
 ```text
-Tool
-├── name
-├── description
-├── input schema
-└── executor
+runs
+steps
+tool_calls
 ```
 
-### Experiment 04
-加入持久化：
+查看：
+
+```bash
+sqlite3 ./data/agent.db
+```
+
+```sql
+select id,status,input,output from runs order by created_at desc;
+select id,run_id,step_no,kind,status from steps order by created_at desc;
+select id,run_id,step_id,tool_name,status from tool_calls order by created_at desc;
+```
+
+## v0.2 的重要边界
+
+已经持久化 Durable State，但还没有真正完成 Crash Recovery。
+
+例如：
 
 ```text
-Run
- ├── Step
- ├── ToolCall
- └── Observation
+ToolCall = RUNNING
+      ↓
+process crash
 ```
 
-### Experiment 05
-加入 checkpoint / retry / idempotency。
+下一版应增加：
 
-这一步开始可以逐渐与你的 Agent Runtime 项目融合。
+- Recovery Manager
+- Retry Policy
+- Checkpoint / Resume
+- Idempotency Key
+- Lease
 
-## 6. 与 Agent Runtime 的关系
-
-建议不要把这个实验室做成另一个“大而全 Agent Framework”。
-
-它应该承担：
+## 演进路线
 
 ```text
-Local Model
-    ↓
-LLM Client
-    ↓
-Agent Loop
-    ↓
-Tool Calling
-    ↓
-Runtime Experiments
+v0.1 Local LLM + Agent Loop
+v0.2 Native Tool Calling + Durable State
+v0.3 Checkpoint + Resume + Retry
+v0.4 RAG + Memory
+v0.5 Event-driven Worker
+v0.6 Dynamic DAG
+v0.7 Sandbox / Remote Tool Provider
+v1.0 Local Agent Runtime
 ```
-
-然后把成熟的：
-
-- Run / Step
-- Dynamic DAG
-- Durable State
-- Checkpoint
-- Crash Recovery
-- Event-driven execution
-
-逐步迁移到你的 `agent-runtime` 项目。
-
-## 7. 后续版本
-
-建议按以下顺序演进：
-
-- v0.2：原生 Tool Calling
-- v0.3：SQLite/MySQL Durable State
-- v0.4：Checkpoint + Resume
-- v0.5：RAG
-- v0.6：Sandbox / Remote Tool Provider
-- v0.7：Dynamic DAG
-- v1.0：Local Agent Runtime Demo
-

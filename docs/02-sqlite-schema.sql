@@ -1,0 +1,19 @@
+CREATE TABLE runs (
+ id TEXT PRIMARY KEY, status TEXT NOT NULL, input TEXT NOT NULL,
+ output TEXT NOT NULL DEFAULT '', error TEXT NOT NULL DEFAULT '',
+ created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE steps (
+ id TEXT PRIMARY KEY, run_id TEXT NOT NULL, step_no INTEGER NOT NULL,
+ kind TEXT NOT NULL, status TEXT NOT NULL, input TEXT NOT NULL DEFAULT '',
+ output TEXT NOT NULL DEFAULT '', error TEXT NOT NULL DEFAULT '',
+ created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE tool_calls (
+ id TEXT PRIMARY KEY, run_id TEXT NOT NULL, step_id TEXT NOT NULL,
+ tool_name TEXT NOT NULL, arguments TEXT NOT NULL, status TEXT NOT NULL,
+ result TEXT NOT NULL DEFAULT '', error TEXT NOT NULL DEFAULT '',
+ created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
