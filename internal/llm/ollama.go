@@ -7,7 +7,7 @@ import (
 
 type OllamaClient struct {
 	client *openai.Client
-	model string
+	model  string
 }
 
 func NewOllamaClient(baseURL, model string) *OllamaClient {
@@ -22,9 +22,9 @@ func (c *OllamaClient) Chat(ctx context.Context, messages []openai.ChatCompletio
 		reqTools = append(reqTools, openai.Tool{
 			Type: openai.ToolTypeFunction,
 			Function: &openai.FunctionDefinition{
-				Name: t.Name,
+				Name:        t.Name,
 				Description: t.Description,
-				Parameters: t.Parameters,
+				Parameters:  t.Parameters,
 			},
 		})
 	}
@@ -32,11 +32,15 @@ func (c *OllamaClient) Chat(ctx context.Context, messages []openai.ChatCompletio
 	resp, err := c.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 		Model: c.model, Messages: messages, Tools: reqTools,
 	})
-	if err != nil { return ChatResult{}, err }
-	if len(resp.Choices) == 0 { return ChatResult{}, nil }
+	if err != nil {
+		return ChatResult{}, err
+	}
+	if len(resp.Choices) == 0 {
+		return ChatResult{}, nil
+	}
 
 	return ChatResult{
-		Content: resp.Choices[0].Message.Content,
+		Content:   resp.Choices[0].Message.Content,
 		ToolCalls: resp.Choices[0].Message.ToolCalls,
 	}, nil
 }

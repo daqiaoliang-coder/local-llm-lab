@@ -1,177 +1,85 @@
-# Local LLM Lab v0.3
+# local-llm-lab v0.4
 
-v0.3 在 v0.2 的 Native Tool Calling + SQLite Durable State 上加入：
+一个面向后端 / Agent Infra 学习的本地 LLM 实验室。重点不是“跑一个聊天机器人”，而是把一个本地模型逐步演进成一个可恢复的 Agent Runtime。
 
-- Checkpoint
-- Crash Recovery
-- Retry Policy
-- Idempotency Key
-- Recovery Manager
-- Resume
+## v0.4 新增
 
-目标：把本地 Agent 从“可持久化”推进到“可恢复执行”。
+- **Durable Agent Execution**：Run 不再只是一次函数调用，而是可持久化、可恢复的执行单元。
+- **Checkpoint = logical state**：持久化完整 `openai.ChatCompletionMessage` 序列，让重启后的 Agent 能继续下一次 LLM 调用。
+- **Run Resume**：启动时扫描 `RUNNING` Run，恢复 checkpoint，reconcile pending ToolCall，再继续原 Run。
+- **Crash Recovery**：ToolCall 卡在 RUNNING/RETRYING 时，根据 RetryPolicy 恢复。
+- **Idempotency Key**：`tool:<tool_call_id>` 在进程重启后保持不变。
+- **Tool Retry Contract**：Tool 自己声明是否可重试以及最大次数。
+- **多 ToolCall pending state**：支持一次 LLM 返回多个工具调用时逐个恢复。
 
-## 核心执行模型
-
-```text
-Run
- ├── Step
- │    └── ToolCall
- │
- ├── Checkpoint
- │
- └── Recovery
-```
-
-典型故障：
-
-```text
-ToolCall = RUNNING
-      ↓
-process crash
-      ↓
-restart
-      ↓
-RecoveryManager
-      ↓
-判断是否可以安全重试
-      ↓
-Retry / Fail / Resume
-```
-
-## 启动
+## 快速开始
 
 ```bash
 ollama pull qwen3:4b
 ollama serve
+
 go mod tidy
 go run ./cmd/chat
 ```
 
-默认：
+如果你已经有 v0.3 的数据库，可以直接复用 `./data/agent.db`；迁移逻辑会保留已有数据。
+
+## 代码结构
 
 ```text
-LLM_MODEL=qwen3:4b
-DB_PATH=./data/agent.db
-LAB_WORKSPACE=.
+cmd/chat/                  CLI
+internal/llm/              Ollama / OpenAI-compatible client
+internal/tools/            Tool + RetryPolicy + file tools
+internal/db/               durable state / checkpoint / ToolCall repository
+internal/agent/            Run / Resume / Recovery
+
+docs/01-v04-design.md      v0.4 设计
+docs/02-crash-sequence.md  Crash / Resume 时序
+docs/03-interview.md       面试问答
 ```
 
-## 演示 Recovery
-
-程序启动时会自动扫描上次异常退出遗留的：
+## 关键状态机
 
 ```text
-RUNNING runs
-RUNNING steps
-RUNNING tool_calls
+Run:      RUNNING ───────────────→ SUCCEEDED / FAILED
+
+ToolCall: RUNNING → RETRYING → SUCCEEDED
+              │                   └→ FAILED
+              └────────────────────→ FAILED
+
+Checkpoint:
+  assistant tool-call message
+          ↓
+  pending_tool_call_ids
+          ↓
+  tool result appended
+          ↓
+  pending_tool_call_ids = []
+          ↓
+  next LLM call
 ```
 
-并执行恢复策略。
+## 如何理解这个项目的核心价值
 
-当前文件工具属于只读、确定性较高的工具，因此默认允许自动重试。
+v0.2 解决“状态落盘”；v0.3 解决“发现失败并重试 Tool”；v0.4 才真正解决“恢复 Agent 的逻辑执行”。
 
-## 为什么需要 Idempotency
+最值得在面试中讲的不是 SQLite，而是：
 
-假设：
+> **execution state ≠ conversation state。**
+>
+> Durable Agent Runtime 不仅要知道“哪个 Step 在运行”，还必须保存能让 LLM 从断点继续工作的 logical state。
 
-```text
-ToolCall
-   ↓
-外部系统已经执行成功
-   ↓
-Agent 在收到结果前 crash
-```
+## 生产级差距
 
-重启后如果再次执行：
+这是本地实验室，不声称是生产 Runtime。距离生产级还需要：
 
-```text
-ToolCall
-   ↓
-External Side Effect
-```
+- DB transaction / Outbox
+- Worker lease / heartbeat / fencing token
+- 分布式任务 claim 与并发控制
+- 副作用工具的真正幂等协议
+- Tool sandbox / capability / permission
+- tracing / metrics / replay / audit
+- 多 Worker 调度与水平扩展
+- 更完整的 cancel / timeout / human-in-the-loop
 
-可能产生重复副作用。
-
-所以：
-
-```text
-ToolCall
-  + idempotency_key
-  + retry policy
-```
-
-是 Durable Agent 的重要基础。
-
-本项目 v0.3 对文件读取等只读工具采用 deterministic retry；后续有副作用的工具应增加明确的 retry class。
-
-## v0.3 新增数据
-
-```text
-tool_calls
-├── attempt
-├── max_attempts
-├── idempotency_key
-├── retryable
-└── last_error
-
-checkpoints
-├── run_id
-├── step_id
-├── state
-└── created_at
-```
-
-## 推荐实验
-
-### 1. 正常执行
-
-```text
-请读取 README.md 并总结。
-```
-
-### 2. 人工制造 RUNNING ToolCall
-
-可以使用 sqlite3：
-
-```sql
-update tool_calls
-set status='RUNNING'
-where id='...';
-```
-
-然后重启程序。
-
-观察启动日志：
-
-```text
-[recovery] found RUNNING tool_call ...
-[recovery] retrying ...
-```
-
-### 3. 思考真正的生产问题
-
-如果 Tool 是：
-
-```text
-create_order
-charge_payment
-send_email
-delete_resource
-```
-
-是否应该自动 retry？
-
-答案不能由 Runtime 简单决定，而应该由 Tool 的 retry policy / idempotency contract 决定。
-
-## 演进路线
-
-```text
-v0.1 Local LLM + Agent Loop
-v0.2 Native Tool Calling + Durable State
-v0.3 Recovery + Retry + Checkpoint + Idempotency
-v0.4 RAG + Memory
-v0.5 Event-driven Worker
-v0.6 Dynamic DAG
-v0.7 Sandbox / Remote Tool Provider
-v1.0 Local Agent Runtime
-```
+这些恰好也是下一阶段可以继续做成 Agent Infra 项目的方向。

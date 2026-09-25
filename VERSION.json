@@ -1,10 +1,17 @@
 {
-  "version": "v0.3",
+  "version": "v0.4",
+  "name": "local-llm-lab",
+  "focus": "durable agent execution / resume",
+  "model": "qwen3:4b",
+  "storage": "sqlite",
   "features": [
-    "checkpoint",
+    "native tool calling",
+    "durable Run / Step / ToolCall state",
+    "checkpoint with full LLM message state",
     "crash recovery",
+    "run resume",
     "retry policy",
-    "idempotency key",
-    "recovery manager"
+    "stable idempotency key",
+    "explicit tool retry contract"
   ]
 }

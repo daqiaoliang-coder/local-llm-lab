@@ -6,13 +6,13 @@ import (
 )
 
 type ToolSpec struct {
-	Name string
+	Name        string
 	Description string
-	Parameters map[string]any
+	Parameters  map[string]any
 }
 
 type ChatResult struct {
-	Content string
+	Content   string
 	ToolCalls []openai.ToolCall
 }
 

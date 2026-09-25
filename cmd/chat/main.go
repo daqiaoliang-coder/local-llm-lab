@@ -21,7 +21,9 @@ func main() {
 	workspace := getenv("LAB_WORKSPACE", ".")
 
 	store, err := db.Open(dbPath)
-	if err != nil { panic(err) }
+	if err != nil {
+		panic(err)
+	}
 	defer store.Close()
 
 	client := llm.NewOllamaClient(baseURL, model)
@@ -30,19 +32,27 @@ func main() {
 	registry.Register(tools.NewReadFileTool(workspace))
 
 	ag := agent.New(client, registry, store)
-	recovery := agent.NewRecoveryManager(store, registry)
-	if err := recovery.Recover(ctx); err != nil { fmt.Printf("[recovery] error=%v\n", err) }
+	recovery := agent.NewRecoveryManager(store, registry, ag)
+	if err := recovery.Recover(ctx); err != nil {
+		fmt.Printf("[recovery] error=%v\n", err)
+	}
 
-	fmt.Printf("Local LLM Lab v0.2 | model=%s | db=%s\n", model, dbPath)
+	fmt.Printf("Local LLM Lab v0.4 | model=%s | db=%s\n", model, dbPath)
 	fmt.Println("输入 exit 退出。")
 
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Print("you> ")
-		if !scanner.Scan() { break }
+		if !scanner.Scan() {
+			break
+		}
 		input := strings.TrimSpace(scanner.Text())
-		if input == "" { continue }
-		if input == "exit" || input == "quit" { break }
+		if input == "" {
+			continue
+		}
+		if input == "exit" || input == "quit" {
+			break
+		}
 
 		answer, runID, err := ag.Run(ctx, input)
 		if err != nil {
@@ -54,6 +64,8 @@ func main() {
 }
 
 func getenv(key, fallback string) string {
-	if v := os.Getenv(key); v != "" { return v }
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
 	return fallback
 }
